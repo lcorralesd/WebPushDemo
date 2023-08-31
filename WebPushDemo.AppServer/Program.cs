@@ -1,9 +1,30 @@
+using WebPushDemo.AppServer.Options;
+using WebPushDemo.AppServer.Services;
+using WebPushDemo.Shared.Entities;
+
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
 // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
+
+builder.Services.AddScoped<PushNotificationService>();
+builder.Services.AddOptions().Configure<VapidInfoOptions>(builder.Configuration.GetSection(VapidInfoOptions.SectionKey));
+
+builder.Services.AddWebPushServerServices();
+
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("AllowAll", builder =>
+    {
+        builder.AllowAnyOrigin()
+            .AllowAnyMethod()
+            .AllowAnyHeader();
+    });
+});
+
+
 
 var app = builder.Build();
 
@@ -16,29 +37,18 @@ if (app.Environment.IsDevelopment())
 
 app.UseHttpsRedirection();
 
-var summaries = new[]
+app.MapPost("subscribe", async(WebPushSubscription subscription, PushNotificationService service)=>
 {
-    "Freezing", "Bracing", "Chilly", "Cool", "Mild", "Warm", "Balmy", "Hot", "Sweltering", "Scorching"
-};
+    await service.Subscribe(subscription);
+    return Results.Ok();
+});
 
-app.MapGet("/weatherforecast", () =>
+app.MapGet("request-example-notification", (PushNotificationService service)=>
 {
-    var forecast = Enumerable.Range(1, 5).Select(index =>
-        new WeatherForecast
-        (
-            DateOnly.FromDateTime(DateTime.Now.AddDays(index)),
-            Random.Shared.Next(-20, 55),
-            summaries[Random.Shared.Next(summaries.Length)]
-        ))
-        .ToArray();
-    return forecast;
-})
-.WithName("GetWeatherForecast")
-.WithOpenApi();
+    service.SendExampleNotification();
+    return Results.Ok();
+});
+
+app.UseCors("AllowAll");
 
 app.Run();
-
-internal record WeatherForecast(DateOnly Date, int TemperatureC, string? Summary)
-{
-    public int TemperatureF => 32 + (int)(TemperatureC / 0.5556);
-}
